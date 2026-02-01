@@ -5,39 +5,40 @@ import numpy as np
 
 def main(target):
     # rawDataset = [(1, 69), (2, 100), (3, 55), (4, 79), (5, 84), (6, 95), (7, 92), (8, 79), (9, 64), (10, 55)]
-    rawDataset = [(80, 69), (81, 100), (82, 55), (90, 79), (100, 2378), (1001, 6239)]
+    rawDataset = [(80, 69), (81, 100), (82, 55), (90, 79), (100, 2378), (1001, 6239), (323105324, 32324)]
 
-    dataSetPoly = get_dataset_poly(raw_dataset=rawDataset)
-    markerPoly = get_marker_poly(rawDataset=rawDataset)
+    precision = 100000  # 定点高精度因子，可调
 
+    keys = np.array([k for k, _ in rawDataset])
+    keys_min, keys_max = keys.min(), keys.max()
+    keys_norm = (keys - keys_min) / (keys_max - keys_min)
+    msgs = np.array([int(m * precision) for _, m in rawDataset])
+
+    dataSetPoly = lagrange(keys_norm, msgs)
+    markerPoly = np.poly1d(np.poly(keys_norm))
+    
     pubKey, privKey = paillier.generate_paillier_keypair(n_length=2048)
 
-    # encryptedKey = pubKey.encrypt(target)
+    target_norm = (target - keys_min) / (keys_max - keys_min)
+
     encryptedKeys = []
-
-    for k, _ in enumerate(rawDataset):
-        encryptedKeys.append(pubKey.encrypt(target**k))
-
-    # print(dataSetPoly.coef)
-    # print(dataSetPoly)
-
-    # print(markerPoly.coef)
-    # print(markerPoly)
-
-    # print(f"target {target} is: {markerPoly(target)}")
-
+    for k in range(len(rawDataset)):
+        encryptedKeys.append(pubKey.encrypt(target_norm**k))
+    
     encryptedResult = sum([c * k for c, k in zip(dataSetPoly.coef[::-1], encryptedKeys)])
-
+    
     encryptedMarkers = []
-    for k, _ in enumerate(markerPoly.coef):
-        encryptedMarkers.append(pubKey.encrypt(target**k))
-
+    for k in range(len(markerPoly.coef)):
+        encryptedMarkers.append(pubKey.encrypt(target_norm**k))
     zipedList = [c * k for c, k in zip(markerPoly.coef[::-1], encryptedMarkers)]
-    # print(zipedList)
     encryptedMarkerResult = sum(zipedList)
 
     result = privKey.decrypt(encryptedResult)
     marker = privKey.decrypt(encryptedMarkerResult)
+
+    # 高精度定点还原
+    result = round(result / precision)
+    marker = marker / precision
 
     print(f"target: {target} marker: {marker} result: {result}")
 
